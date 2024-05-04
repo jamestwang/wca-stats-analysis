@@ -7,12 +7,12 @@ import time as t
 
 start_time = t.time()
 # Import all results
-results_df = pd.read_csv("WCA_Export/WCA_export_Results.tsv", sep="\t")
+results_df = pd.read_csv("WCA_export_Results.tsv", sep="\t")
 print(f"Results import took {t.time() - start_time} seconds.")
 
 start_time = t.time()
 # Import all competition data [end of the competition]
-competition_df = pd.read_csv("WCA_Export/WCA_export_Competitions.tsv", sep="\t")
+competition_df = pd.read_csv("WCA_export_Competitions.tsv", sep="\t")
 print(f"Competitions import took {t.time() - start_time} seconds.")
 
 start_time = t.time()
