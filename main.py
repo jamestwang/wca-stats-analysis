@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import datetime as dt
 import time as t
 
-ONLY333 = False
+ONLY333 = True
 
 start_time = t.time()
 # Import all results
@@ -90,3 +90,50 @@ else:
     plt.close()
     print(f"Plotted {len(event_df_filtered)} {event_id} best nonzero completed solves.")
 print(f"Nonzero raw plotting took {t.time() - start_time} seconds.")
+
+# these will be used in common throughout the rest of the 3x3 analysis
+event_id = "3x3x3"
+event_df = event_dfs[0]
+
+start_time = t.time()
+# all solves
+filename = f"all_singles_scatterplot_{event_id}.png"
+fig, ax = plt.subplots(figsize=(8, 6))
+num_solves = 0
+event_df['wr'] = event_df['best'].cummin()
+for i in range(5):
+    sns.scatterplot(data=event_df, x='date', y=f'value{i+1}', ax=ax, color="#0352fc")
+    num_solves += len(event_df)
+ax.set_title(f"{event_id} Results")
+ax.plot(event_df['date'], event_df['wr'], color='red', label='World Record')
+ax.legend()
+plt.xlabel("Date")
+plt.ylabel("Time")
+plt.savefig(filename)
+plt.close()
+print(f"Plotted {num_solves} {event_id} solves.")
+print(f"Total single plotting took {t.time() - start_time} seconds.")
+
+start_time = t.time()
+# all completed solves
+filename = f"completed_singles_scatterplot_{event_id}.png"
+fig, ax = plt.subplots(figsize=(8, 6))
+num_solves = 0
+event_best_df = event_df[event_df['best'] > 0]
+event_best_df['wr'] = event_best_df['best'].cummin()
+event_best_avg_df = event_df[event_df['average'] > 0]
+event_best_avg_df['wr'] = event_best_avg_df['average'].cummin()
+for i in range(5):
+    event_df_filtered = event_df[event_df[f'value{i+1}'] > 0]
+    sns.scatterplot(data=event_df_filtered, x='date', y=f'value{i+1}', ax=ax, color="#0352fc")
+    num_solves += len(event_df_filtered)
+ax.set_title(f"{event_id} Results")
+ax.plot(event_best_avg_df['date'], event_best_avg_df['wr'], color='green', label='World Record Average')
+ax.plot(event_best_df['date'], event_best_df['wr'], color='red', label='World Record Single')
+ax.legend()
+plt.xlabel("Date")
+plt.ylabel("Time")
+plt.savefig(filename)
+plt.close()
+print(f"Plotted {num_solves} {event_id} completed solves.")
+print(f"Total completed single plotting took {t.time() - start_time} seconds.")
