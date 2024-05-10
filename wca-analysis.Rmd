@@ -1,0 +1,216 @@
+```{r}
+overall_start <- Sys.time()
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r import/clean data}
+# Should take ~5 seconds
+
+start <- Sys.time()
+results <- read_tsv("data/WCA_export_Results.tsv", show_col_types = 0) 
+sprintf("Results import: %s seconds.", round(Sys.time() - start, 4))
+
+start <- Sys.time()
+persons <- read_tsv("data/WCA_export_Persons.tsv", show_col_types = 0) 
+sprintf("Persons import: %s seconds.", round(Sys.time() - start, 4))
+
+start <- Sys.time()
+x3_results <- results %>%
+  # remove non-3x3 events
+  filter(eventId == "333") %>% 
+  # convert from centiseconds to seconds
+  mutate(average = ifelse(average == -1, average, average/100),
+    best = ifelse(is.element(best, c(0, -1)), value1, value1/100),
+    value1 = ifelse(is.element(value1, c(0, -1, -2)), value1, value1/100),
+    value2 = ifelse(is.element(value2, c(0, -1, -2)), value2, value2/100),
+    value3 = ifelse(is.element(value3, c(0, -1, -2)), value3, value3/100),
+    value4 = ifelse(is.element(value4, c(0, -1, -2)), value4, value4/100),
+    value5 = ifelse(is.element(value5, c(0, -1, -2)), value5, value5/100))
+
+sprintf("Clean 3x3 results: %s seconds.", round(Sys.time() - start, 4))
+
+```
+
+```{r pivot results}
+
+start <- Sys.time()
+x3_pivoted <- x3_results %>% 
+  pivot_longer(
+    cols = starts_with("value"),
+    values_to = "result",
+    names_to = NULL
+  ) %>% 
+  select(-c(average, best, formatId)) %>% 
+  # drop DNF, DNS, No result
+  filter(result != 0, result != -1, result != -2)
+
+# remove people with fewer than 5 solves
+
+min_n <- 10
+
+tallies <- x3_pivoted %>%
+  group_by(personId) %>% 
+  tally(name="num_solves")
+
+# add num_solves to persons table
+persons <- persons %>% 
+  left_join(tallies, by=join_by("id" == "personId"))
+
+to_remove <- tallies %>% 
+  filter(num_solves >= min_n)
+
+x3_pivoted <- x3_pivoted %>%
+  right_join(to_remove)
+
+sprintf("Pivot + filter 3x3 results: %s seconds.", round(Sys.time() - start, 4))
+
+```
+
+```{r}
+start <- Sys.time()
+means <- x3_pivoted %>%
+  group_by(personId) %>% 
+  summarize(mean = mean(result))
+sprintf("Summarize mean: %s seconds.", round(Sys.time() - start, 4))
+
+start <- Sys.time()
+variances <- x3_pivoted %>%
+  group_by(personId) %>% 
+  # need to use population variance instead of sample to be consistent
+  # with paper/slides
+  summarize(var = var(result)) 
+sprintf("Summarize variance: %s seconds.", round(Sys.time() - start, 4))
+
+start <- Sys.time()
+persons_x3_sum <- left_join(persons, means, by=join_by(id == personId)) %>% 
+  left_join(variances, by=join_by(id == personId))
+sprintf("Left join: %s seconds.", round(Sys.time() - start, 4))
+
+```
+
+```{r}
+persons_x3_sum
+persons_x3_sum <- persons_x3_sum %>% 
+  mutate(nvar = num_solves / var,
+         varmean = var * mean,
+         nvarmean = nvar * mean)
+```
+
+```{r}
+# ggplot(persons_x3_sum) +
+#   geom_point(aes(x=num_solves, y=mean), alpha=0.3)
+# 
+# ggplot(persons_x3_sum) +
+#   geom_point(aes(x=num_solves, y=var), alpha=0.3)
+
+theme_set(theme_bw())
+
+ggplot(persons_x3_sum) + 
+  geom_histogram(aes(x=num_solves)) +
+  scale_x_log10() +
+  geom_vline(aes(xintercept=5), color="red")
+  # geom_histogram(aes(x=var))
+
+ggplot(persons_x3_sum) + 
+  geom_histogram(aes(x=var)) +
+  xlim(0, 1000)
+
+mean((persons_x3_sum %>% 
+  filter(num_solves == 10))$var, na.rm=TRUE)
+  # scale_x_log10() +
+  # geom_vline(aes(xintercept=5), color="red")
+  # geom_histogram(aes(x=var))
+
+head(persons_x3_sum)
+```
+
+```{r}
+geq30 <- persons_x3_sum %>% 
+  filter(num_solves >= 30) %>% 
+  arrange(var)
+
+head(geq30)
+
+```
+
+LUCKIEST
+```{r}
+x3_overall_luck <- x3_pivoted %>% 
+  group_by(personId) %>% 
+  summarize(
+    single = min(result),
+    avg = mean(result),
+    luck = (avg - single)/avg)
+
+persons_x3_sum_luck <- left_join(persons_x3_sum, x3_overall_luck, by=join_by(id == personId))
+
+```
+
+```{r import_for_luck}
+# Should take ~5 seconds
+
+start <- Sys.time()
+results <- read_tsv("data/WCA_export_Results.tsv", show_col_types = 0) 
+sprintf("Results import: %s seconds.", round(Sys.time() - start, 4))
+
+start <- Sys.time()
+persons <- read_tsv("data/WCA_export_Persons.tsv", show_col_types = 0) 
+sprintf("Persons import: %s seconds.", round(Sys.time() - start, 4))
+
+start <- Sys.time()
+x3_results <- results %>%
+  # remove non-3x3 events
+  filter(eventId == "333") %>% 
+  # convert from centiseconds to seconds
+  mutate(average = ifelse(is.element(average, c(0, -1, -2)), average, average/100),
+    best = ifelse(is.element(best, c(0, -1, -2)), value1, value1/100),
+    value1 = ifelse(is.element(value1, c(0, -1, -2)), value1, value1/100),
+    value2 = ifelse(is.element(value2, c(0, -1, -2)), value2, value2/100),
+    value3 = ifelse(is.element(value3, c(0, -1, -2)), value3, value3/100),
+    value4 = ifelse(is.element(value4, c(0, -1, -2)), value4, value4/100),
+    value5 = ifelse(is.element(value5, c(0, -1, -2)), value5, value5/100))
+
+sprintf("Clean 3x3 results: %s seconds.", round(Sys.time() - start, 4))
+
+```
+
+```{r mutate_to_find_luck}
+failed <- function(result) {
+  (result == 0 | result == -1 | result == -2 | is.null(result))
+}
+
+luckify <- function(avg, single) {
+  ifelse(failed(avg), 0,
+  ifelse(failed(single), 0,
+  (avg - single)/avg))
+}
+
+
+
+luck <- x3_results %>% 
+  filter(average > 0) %>% 
+  filter(best > 0) %>% 
+  select(!c(roundTypeId, pos, formatId, regionalSingleRecord, regionalAverageRecord, personCountryId)) %>% 
+  mutate(luck = luckify(average, best)) %>% 
+  group_by(personId) %>% 
+  summarize(luck = mean(luck, na.rm = TRUE))
+
+
+head(luck)
+
+# screenshot <- luck %>% 
+#   select(c(id, mean))
+  
+         # num_solves = is_solved(c(value1, value2, value3, value4, value5)))
+
+# x3_overall_luck <- x3_pivoted %>% 
+#   group_by(personId) %>% 
+#   summarize(
+#     luck = mean()
+
+```
+
+```{r}
+sprintf("Overall runtime: %s seconds.", round(Sys.time() - overall_start, 4))
+```
